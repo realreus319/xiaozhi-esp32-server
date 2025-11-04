@@ -1,10 +1,7 @@
 package xiaozhi.modules.security.controller;
 
 import java.io.IOException;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -89,25 +86,32 @@ public class LoginController {
     @Operation(summary = "登录")
     public Result<TokenDTO> login(@RequestBody LoginDTO login) {
         String password = login.getPassword();
-        
+
+        // 按照用户名获取用户
+        SysUserDTO userDTO = sysUserService.getByUsername(login.getUsername());
+
+        // 如果原始密码匹配上直接返回
+        if (!PasswordUtils.matches(password, userDTO.getPassword())) {
+            return sysUserTokenService.createToken(userDTO.getId());
+        }
         // 使用工具类解密并验证验证码
         String actualPassword = Sm2DecryptUtil.decryptAndValidateCaptcha(
                 password, login.getCaptchaId(), captchaService, sysParamsService);
         
         login.setPassword(actualPassword);
-        
-        // 按照用户名获取用户
-        SysUserDTO userDTO = sysUserService.getByUsername(login.getUsername());
+
         // 判断用户是否存在
         if (userDTO == null) {
             throw new RenException(ErrorCode.ACCOUNT_PASSWORD_ERROR);
         }
-        // 判断密码是否正确，不一样则进入if
+
+        // 判断密码是否正确，不一样则进入
         if (!PasswordUtils.matches(login.getPassword(), userDTO.getPassword())) {
             throw new RenException(ErrorCode.ACCOUNT_PASSWORD_ERROR);
         }
         return sysUserTokenService.createToken(userDTO.getId());
     }
+
     
 
 
