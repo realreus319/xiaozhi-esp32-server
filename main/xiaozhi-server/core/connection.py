@@ -164,6 +164,25 @@ class ConnectionHandler:
         try:
             # 获取并验证headers
             self.headers = dict(ws.request.headers)
+            
+            if self.headers.get("device-id", None) is None:
+                # 尝试从 URL 的查询参数中获取 device-id
+                from urllib.parse import parse_qs, urlparse
+
+                # 从 WebSocket 请求中获取路径
+                request_path = ws.request.path
+                if not request_path:
+                    self.logger.bind(tag=TAG).error("无法获取请求路径")
+                    return
+                parsed_url = urlparse(request_path)
+                query_params = parse_qs(parsed_url.query)
+                if "device-id" in query_params:
+                    self.headers["device-id"] = query_params["device-id"][0]
+                    self.headers["client-id"] = query_params["client-id"][0]
+                else:
+                    await ws.send("端口正常，如需测试连接，请使用test_page.html")
+                    await self.close(ws)
+                    return
             real_ip = self.headers.get("x-real-ip") or self.headers.get(
                 "x-forwarded-for"
             )
@@ -753,22 +772,56 @@ class ConnectionHandler:
                 )
                 memory_str = future.result()
 
+                       # 硬编码方式判断LLM provider是否支持device_id参数
+            llm_class_name = self.llm.__class__.__name__
+            llm_module_name = self.llm.__class__.__module__
+            
+            # 支持device_id参数的LLM provider
+            providers_supporting_device_id = [
+                'dify.dify.LLMProvider',  # Dify provider
+                'coze.coze.LLMProvider'   # Coze provider
+            ]
+            
+            # 构造完整的provider标识
+            full_provider_name = f"{llm_module_name.split('.')[-2]}.{llm_module_name.split('.')[-1]}.{llm_class_name}"
+            provider_supports_device_id = full_provider_name in providers_supporting_device_id
+
+
             if self.intent_type == "function_call" and functions is not None:
                 # 使用支持functions的streaming接口
-                llm_responses = self.llm.response_with_functions(
-                    self.session_id,
-                    self.dialogue.get_llm_dialogue_with_memory(
-                        memory_str, self.config.get("voiceprint", {})
-                    ),
-                    functions=functions,
-                )
+                if provider_supports_device_id:
+                    llm_responses = self.llm.response_with_functions(
+                        self.session_id,
+                        self.dialogue.get_llm_dialogue_with_memory(
+                            memory_str, self.config.get("voiceprint", {})
+                        ),
+                        functions=functions,
+                        device_id=self.device_id,
+                    )
+                else:
+                    llm_responses = self.llm.response_with_functions(
+                        self.session_id,
+                        self.dialogue.get_llm_dialogue_with_memory(
+                            memory_str, self.config.get("voiceprint", {})
+                        ),
+                        functions=functions,
+                    )
             else:
-                llm_responses = self.llm.response(
-                    self.session_id,
-                    self.dialogue.get_llm_dialogue_with_memory(
-                        memory_str, self.config.get("voiceprint", {})
-                    ),
-                )
+                if provider_supports_device_id:
+                    llm_responses = self.llm.response(
+                        self.session_id,
+                        self.dialogue.get_llm_dialogue_with_memory(
+                            memory_str, self.config.get("voiceprint", {})
+                        ),
+                        device_id=self.device_id,
+                    )
+                else:
+                    llm_responses = self.llm.response(
+                        self.session_id,
+                        self.dialogue.get_llm_dialogue_with_memory(
+                            memory_str, self.config.get("voiceprint", {})
+                        ),
+                    )
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"LLM 处理出错 {query}: {e}")
             return None
