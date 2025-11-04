@@ -19,19 +19,45 @@ class LLMProvider(LLMProviderBase):
         if model_key_msg:
             logger.bind(tag=TAG).error(model_key_msg)
 
-    def response(self, session_id, dialogue, **kwargs):
+    def response(self, session_id, dialogue, device_id=None, client_id=None, headers=None, **kwargs):
         try:
             # 取最后一条用户消息
             last_msg = next(m for m in reversed(dialogue) if m["role"] == "user")
             conversation_id = self.session_conversation_map.get(session_id)
 
+            # 初始化request_json
+            request_json = {}
+
             # 发起流式请求
             if self.mode == "chat-messages":
+                # chat-messages模式：在inputs中添加更多参数
+                inputs_data = {}
+                
+                # 添加所有设备相关参数
+                if device_id:
+                    inputs_data["device_id"] = device_id
+                if client_id:
+                    inputs_data["client_id"] = client_id
+                if session_id:
+                    inputs_data["session_id"] = session_id
+                    
+                # 添加headers信息（可选，根据需要选择性添加）
+                if headers:
+                    # 注意：headers可能包含敏感信息，只选择性添加需要的字段
+                    safe_headers = {}
+                    if "user-agent" in headers:
+                        safe_headers["user_agent"] = headers["user-agent"]
+                    if "x-forwarded-for" in headers:
+                        safe_headers["forwarded_for"] = headers["x-forwarded-for"]
+                    if "x-real-ip" in headers:
+                        safe_headers["real_ip"] = headers["x-real-ip"]
+                    inputs_data["headers"] = safe_headers
+                
                 request_json = {
                     "query": last_msg["content"],
                     "response_mode": "streaming",
                     "user": session_id,
-                    "inputs": {},
+                    "inputs": inputs_data,
                     "conversation_id": conversation_id,
                 }
             elif self.mode == "workflows/run":
@@ -91,7 +117,7 @@ class LLMProvider(LLMProviderBase):
             logger.bind(tag=TAG).error(f"Error in response generation: {e}")
             yield "【服务响应异常】"
 
-    def response_with_functions(self, session_id, dialogue, functions=None):
+    def response_with_functions(self, session_id, dialogue, functions=None, device_id=None, client_id=None, headers=None):
         if len(dialogue) == 2 and functions is not None and len(functions) > 0:
             # 第一次调用llm， 取最后一条用户消息，附加tool提示词
             last_msg = dialogue[-1]["content"]
@@ -108,5 +134,5 @@ class LLMProvider(LLMProviderBase):
                     break
                 dialogue.pop()
 
-        for token in self.response(session_id, dialogue):
+        for token in self.response(session_id, dialogue, device_id=device_id, client_id=client_id, headers=headers):
             yield token, None
