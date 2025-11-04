@@ -91,7 +91,7 @@ public class LoginController {
         SysUserDTO userDTO = sysUserService.getByUsername(login.getUsername());
 
         // 如果原始密码匹配上直接返回
-        if (!PasswordUtils.matches(password, userDTO.getPassword())) {
+        if (PasswordUtils.matches(password, userDTO.getPassword())) {
             return sysUserTokenService.createToken(userDTO.getId());
         }
         // 使用工具类解密并验证验证码
@@ -105,7 +105,7 @@ public class LoginController {
             throw new RenException(ErrorCode.ACCOUNT_PASSWORD_ERROR);
         }
 
-        // 判断密码是否正确，不一样则进入
+        // 判断密码是否正确，不一样则异常
         if (!PasswordUtils.matches(login.getPassword(), userDTO.getPassword())) {
             throw new RenException(ErrorCode.ACCOUNT_PASSWORD_ERROR);
         }
