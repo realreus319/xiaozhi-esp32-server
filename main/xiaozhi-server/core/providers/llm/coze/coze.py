@@ -116,7 +116,7 @@ class LLMProvider(LLMProviderBase):
         # 使用v3/chat接口并传递parameters参数
         for event in coze.chat.stream(
             bot_id=self.bot_id,
-            user_id=device_id;
+            user_id=device_id,
             #user_id=self.user_id,
             additional_messages=additional_messages,
             conversation_id=conversation_id,
