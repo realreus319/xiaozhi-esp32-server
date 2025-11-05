@@ -26,6 +26,7 @@ class LLMProvider(LLMProviderBase):
         model_key_msg = check_model_key("CozeLLM", self.personal_access_token)
         if model_key_msg:
             logger.bind(tag=TAG).error(model_key_msg)
+            
 
     def response(self, session_id, dialogue, device_id=None, client_id=None, headers=None, **kwargs):
         coze_api_token = self.personal_access_token
