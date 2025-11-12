@@ -76,6 +76,7 @@ class ConnectionHandler:
         self.headers = None
         self.device_id = None
         self.client_ip = None
+        self.client_id = None
         self.prompt = None
         self.welcome_msg = None
         self.max_output_size = 0
@@ -195,6 +196,7 @@ class ConnectionHandler:
             )
 
             self.device_id = self.headers.get("device-id", None)
+            self.client_id = self.headers.get("client_id", None)
 
             # 认证通过,继续处理
             self.websocket = ws

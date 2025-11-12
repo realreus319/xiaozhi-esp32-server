@@ -1,5 +1,5 @@
 import json
-
+from websocket_server import WebSocketServer
 TAG = __name__
 EMOJI_MAP = {
     "😂": "laughing",
@@ -87,16 +87,28 @@ async def get_emotion(conn, text):
             emotion = EMOJI_MAP[char]
             break
     try:
-        await conn.websocket.send(
-            json.dumps(
-                {
-                    "type": "llm",
-                    "text": emoji,
-                    "emotion": emotion,
-                    "session_id": conn.session_id,
-                }
+
+        client_id = conn.websocket.client_id
+        if client_id is None:
+            print(f"警告：未找到客户端ID为 {client_id} 的连接")
+            return
+        connn = WebSocketServer.get_connection(client_id)
+        # 判断连接是否存在
+        if connn is None:
+            print(f"警告：未找到客户端ID为 {client_id} 的连接")
+        else:
+            print(f"找到客户端ID为 {client_id} 的连接，准备发送数据")
+            await connn.websocket.send(
+                json.dumps(
+                    {
+                        "type": "llm",
+                        "text": emoji,
+                        "emotion": emotion,
+                        "session_id": conn.session_id,
+                    }
+                )
             )
-        )
+            print(f"已向客户端ID {client_id} 发送数据：{emoji}")
     except Exception as e:
         conn.logger.bind(tag=TAG).warning(f"发送情绪表情失败，错误:{e}")
     return
