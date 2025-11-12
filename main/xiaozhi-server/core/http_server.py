@@ -47,33 +47,70 @@ class SimpleHttpServer:
         try:
             # 使用加锁的异步方法，确保一致性
             client_ids = await WebSocketServer.list_client_ids()
-            return web.json_response({"connections": client_ids, "count": len(client_ids)})
+            resp = web.json_response({"connections": client_ids, "count": len(client_ids)})
+            # CORS
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+            resp.headers["Access-Control-Allow-Headers"] = "*"
+            return resp
         except Exception as e:
-            return web.json_response({"error": f"failed to list: {e}"}, status=500)
+            resp = web.json_response({"error": f"failed to list: {e}"}, status=500)
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+            resp.headers["Access-Control-Allow-Headers"] = "*"
+            return resp
 
     async def _handle_ws_command(self, request: web.Request) -> web.StreamResponse:
         try:
             client_id = request.match_info.get("clientId")
             if not client_id:
-                return web.json_response({"error": "clientId is required"}, status=400)
+                resp = web.json_response({"error": "clientId is required"}, status=400)
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+                resp.headers["Access-Control-Allow-Headers"] = "*"
+                return resp
             body = await request.json()
 
             handler = WebSocketServer.get_connection_nowait(client_id)
             if handler is None or not getattr(handler, "websocket", None):
-                return web.json_response({"error": f"device not connected: {client_id}"}, status=404)
+                resp = web.json_response({"error": f"device not connected: {client_id}"}, status=404)
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+                resp.headers["Access-Control-Allow-Headers"] = "*"
+                return resp
 
             ws = handler.websocket
             # 判断连接是否可发送
             if (hasattr(ws, "closed") and ws.closed) or (
                 hasattr(ws, "state") and getattr(ws.state, "name", "") == "CLOSED"
             ):
-                return web.json_response({"error": f"websocket closed: {client_id}"}, status=410)
+                resp = web.json_response({"error": f"websocket closed: {client_id}"}, status=410)
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+                resp.headers["Access-Control-Allow-Headers"] = "*"
+                return resp
 
             # 将请求体原样作为JSON文本转发到WebSocket（与示例中的 sendJson 一致）
             await ws.send(json.dumps(body, ensure_ascii=False))
-            return web.json_response({"success": True})
+            resp = web.json_response({"success": True})
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+            resp.headers["Access-Control-Allow-Headers"] = "*"
+            return resp
         except Exception as e:
-            return web.json_response({"error": f"failed to send: {e}"}, status=500)
+            resp = web.json_response({"error": f"failed to send: {e}"}, status=500)
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+            resp.headers["Access-Control-Allow-Headers"] = "*"
+            return resp
+
+    async def _handle_options(self, request: web.Request) -> web.StreamResponse:
+        # 通用的预检请求处理
+        resp = web.Response(status=204)
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "*"
+        return resp
 
     def _get_websocket_url(self, local_ip: str, port: int) -> str:
         """获取websocket地址
@@ -119,9 +156,12 @@ class SimpleHttpServer:
                     web.options("/mcp/vision/explain", self.vision_handler.handle_post),
                     # 管理端: 查询连接与HTTP->WebSocket消息桥接
                     web.get("/admin/ws/connections", self._handle_list_ws_connections),
+                    web.options("/admin/ws/connections", self._handle_options),
                     # 与示例保持一致的命名和消息体：/api/commands/:clientId
                     web.post("/admin/ws/commands/{clientId}", self._handle_ws_command),
+                    web.options("/admin/ws/commands/{clientId}", self._handle_options),
                     web.post("/api/commands/{clientId}", self._handle_ws_command),
+                    web.options("/api/commands/{clientId}", self._handle_options),
                 ]
             )
 
