@@ -155,6 +155,10 @@ class ConnectionHandler:
         # {"mcp":true} 表示启用MCP功能
         self.features = None
 
+        # MCP 请求应答管理
+        self.mcp_request_id = 10000
+        self.mcp_pending_requests = {}
+
         # 标记连接是否来自MQTT
         self.conn_from_mqtt_gateway = False
 
@@ -286,6 +290,34 @@ class ConnectionHandler:
     async def _route_message(self, message):
         """消息路由"""
         if isinstance(message, str):
+            # 优先尝试解析为JSON，并处理MCP响应
+            try:
+                obj = json.loads(message)
+                if isinstance(obj, dict) and obj.get("type") == "mcp":
+                    payload = obj.get("payload", {})
+                    req_id = payload.get("id")
+                    # 仅当存在挂起请求时处理
+                    if req_id is not None and req_id in self.mcp_pending_requests:
+                        pending = self.mcp_pending_requests.pop(req_id, None)
+                        if pending and "future" in pending:
+                            error = payload.get("error")
+                            result = payload.get("result")
+                            fut = pending["future"]
+                            if error:
+                                try:
+                                    fut.set_exception(RuntimeError(error.get("message", "error")))
+                                except Exception:
+                                    pass
+                            else:
+                                try:
+                                    fut.set_result(result)
+                                except Exception:
+                                    pass
+                        return
+            except Exception:
+                # 非JSON或解析失败，视为普通文本消息
+                pass
+            # 非MCP消息，走原有文本处理
             await handleTextMessage(self, message)
         elif isinstance(message, bytes):
             if self.vad is None or self.asr is None:
@@ -1201,3 +1233,44 @@ class ConnectionHandler:
             self.logger.bind(tag=TAG).error(f"超时检查任务出错: {e}")
         finally:
             self.logger.bind(tag=TAG).info("超时检查任务已退出")
+
+        async def send_mcp_request(self, method: str, params: dict, timeout_ms: int = 5000):
+            """向设备发送 MCP 请求并等待响应
+
+            Args:
+                method: MCP 方法名
+                params: MCP 参数
+                timeout_ms: 等待响应的超时时间（毫秒）
+
+            Returns:
+                任意：设备返回的 result 字段内容
+
+            Raises:
+                RuntimeError: 设备返回错误或超时
+            """
+            if not self.websocket:
+                raise RuntimeError("设备未连接")
+            loop = asyncio.get_running_loop()
+            req_id = self.mcp_request_id
+            self.mcp_request_id += 1
+            fut = loop.create_future()
+            self.mcp_pending_requests[req_id] = {"future": fut}
+            payload = {
+                "type": "mcp",
+                "payload": {
+                    "jsonrpc": "2.0",
+                    "method": method,
+                    "id": req_id,
+                    "params": params or {},
+                },
+            }
+            # 发送请求
+            await self.websocket.send(json.dumps(payload, ensure_ascii=False))
+            try:
+                result = await asyncio.wait_for(fut, timeout=timeout_ms / 1000.0)
+                return result
+            except asyncio.TimeoutError:
+                # 清理挂起请求
+                if req_id in self.mcp_pending_requests:
+                    self.mcp_pending_requests.pop(req_id, None)
+                raise RuntimeError("timeout")
