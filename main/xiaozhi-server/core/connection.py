@@ -196,6 +196,8 @@ class ConnectionHandler:
             )
 
             self.device_id = self.headers.get("device-id", None)
+            # 记录client_id（若无则回退为device_id，便于静态映射与工具函数查询）
+            self.client_id = self.headers.get("client-id", self.device_id)
             self.client_id = self.headers.get("client_id", None)
 
             # 认证通过,继续处理

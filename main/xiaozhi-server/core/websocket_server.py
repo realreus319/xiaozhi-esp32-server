@@ -2,7 +2,7 @@ import asyncio
 import json
 
 import websockets
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from config.logger import setup_logging
 from core.connection import ConnectionHandler
 from config.config_loader import get_config_from_api
@@ -16,7 +16,13 @@ TAG = __name__
 class WebSocketServer:
     # 静态连接表: client-id -> ConnectionHandler
     _connections_by_client: Dict[str, "ConnectionHandler"] = {}
-    _connections_lock: asyncio.Lock = asyncio.Lock()
+    _connections_lock: Optional[asyncio.Lock] = None
+
+    @classmethod
+    def _get_lock(cls) -> asyncio.Lock:
+        if cls._connections_lock is None:
+            cls._connections_lock = asyncio.Lock()
+        return cls._connections_lock
 
     def __init__(self, config: dict):
         self.config = config
@@ -54,7 +60,7 @@ class WebSocketServer:
         """保存/更新一个连接实例映射到指定 client-id"""
         if not client_id or handler is None:
             return
-        async with cls._connections_lock:
+        async with cls._get_lock():
             cls._connections_by_client[client_id] = handler
 
     @classmethod
@@ -62,7 +68,7 @@ class WebSocketServer:
         """移除指定 client-id 的连接映射"""
         if not client_id:
             return
-        async with cls._connections_lock:
+        async with cls._get_lock():
             cls._connections_by_client.pop(client_id, None)
 
     @classmethod
@@ -70,14 +76,25 @@ class WebSocketServer:
         """获取指定 client-id 的连接实例，如果不存在返回 None"""
         if not client_id:
             return None
-        async with cls._connections_lock:
+        async with cls._get_lock():
             return cls._connections_by_client.get(client_id)
 
     @classmethod
-    async def list_client_ids(cls) -> list[str]:
+    async def list_client_ids(cls) -> List[str]:
         """获取当前所有已注册的 client-id 列表"""
-        async with cls._connections_lock:
+        async with cls._get_lock():
             return list(cls._connections_by_client.keys())
+
+    # 非异步便捷方法（读操作，不加锁，可能读到旧值，适用于日志/状态展示场景）
+    @classmethod
+    def get_connection_nowait(cls, client_id: str) -> Optional["ConnectionHandler"]:
+        if not client_id:
+            return None
+        return cls._connections_by_client.get(client_id)
+
+    @classmethod
+    def list_client_ids_nowait(cls) -> List[str]:
+        return list(cls._connections_by_client.keys())
 
     async def start(self):
         server_config = self.config["server"]
@@ -116,8 +133,11 @@ class WebSocketServer:
                 websocket.request.headers["authorization"] = query_params[
                     "authorization"
                 ][0]
-        # 记录client-id（用于连接映射）
-        client_id_for_map = websocket.request.headers.get("client-id")
+        # 记录client-id（用于连接映射），若缺失则回退为 device-id
+        client_id_for_map = (
+            websocket.request.headers.get("client-id")
+            or websocket.request.headers.get("device-id")
+        )
 
         """处理新连接，每次创建独立的ConnectionHandler"""
         # 先认证，后建立连接

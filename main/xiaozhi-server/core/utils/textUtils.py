@@ -1,5 +1,4 @@
 import json
-from core.websocket_server import WebSocketServer
 TAG = __name__
 EMOJI_MAP = {
     "😂": "laughing",
@@ -87,30 +86,60 @@ async def get_emotion(conn, text):
             emotion = EMOJI_MAP[char]
             break
     try:
+        # 惰性导入，避免循环依赖
+        from core.websocket_server import WebSocketServer
 
-        client_id = conn.websocket.client_id
-        if client_id is None:
-            print(f"警告：未找到客户端ID为 {client_id} 的连接")
+        # 优先从 ConnectionHandler 获取 client_id（在握手时已记录）
+        client_id = getattr(conn, "client_id", None)
+        if not client_id:
+            # 兜底：从 headers 或 websocket 上尝试获取
+            headers = getattr(conn, "headers", {}) or {}
+            client_id = headers.get("client-id") or headers.get("device-id")
+
+        if not client_id:
+            print("发送情绪表情失败：缺少 client_id")
             return
-        connn = WebSocketServer.get_connection(client_id)
-        # 判断连接是否存在
-        if connn is None:
-            print(f"警告：未找到客户端ID为 {client_id} 的连接")
+
+        # 使用 nowait 便捷读取，验证是否能取到保存的连接
+        all_ids = WebSocketServer.list_client_ids_nowait()
+        print(f"连接映射校验: 请求client_id={client_id}, 当前映射keys={all_ids}")
+        target_conn = WebSocketServer.get_connection_nowait(client_id)
+        if target_conn is None:
+            print(f"未找到已保存的连接: client_id={client_id}, 可用keys={all_ids}")
+            # 退回到当前连接发送，便于功能不中断且协助验证
+            target_ws = getattr(conn, "websocket", None)
         else:
-            print(f"找到客户端ID为 {client_id} 的连接，准备发送数据")
-            await connn.websocket.send(
-                json.dumps(
-                    {
-                        "type": "llm",
-                        "text": emoji,
-                        "emotion": emotion,
-                        "session_id": conn.session_id,
-                    }
-                )
+            target_ws = getattr(target_conn, "websocket", None)
+
+        # 安全发送
+        if not target_ws:
+            print(f"目标连接无websocket: client_id={client_id}")
+            return
+        can_send = True
+        try:
+            if hasattr(target_ws, "closed") and target_ws.closed:
+                can_send = False
+            elif hasattr(target_ws, "state") and getattr(target_ws.state, "name", "") == "CLOSED":
+                can_send = False
+        except Exception:
+            pass
+        if not can_send:
+            print(f"目标websocket已关闭: client_id={client_id}")
+            return
+
+        await target_ws.send(
+            json.dumps(
+                {
+                    "type": "llm",
+                    "text": emoji,
+                    "emotion": emotion,
+                    "session_id": conn.session_id,
+                }
             )
-            print(f"已向客户端ID {client_id} 发送数据：{emoji}")
+        )
+        print(f"已向 client_id={client_id} 发送情绪表情: {emoji}")
     except Exception as e:
-        conn.logger.bind(tag=TAG).warning(f"发送情绪表情失败，错误:{e}")
+        print(f"发送情绪表情失败，错误:{e}")
     return
 
 
