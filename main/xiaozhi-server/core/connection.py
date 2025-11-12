@@ -1234,43 +1234,43 @@ class ConnectionHandler:
         finally:
             self.logger.bind(tag=TAG).info("超时检查任务已退出")
 
-        async def send_mcp_request(self, method: str, params: dict, timeout_ms: int = 5000):
-            """向设备发送 MCP 请求并等待响应
+    async def send_mcp_request(self, method: str, params: dict, timeout_ms: int = 5000):
+        """向设备发送 MCP 请求并等待响应
 
-            Args:
-                method: MCP 方法名
-                params: MCP 参数
-                timeout_ms: 等待响应的超时时间（毫秒）
+        Args:
+            method: MCP 方法名
+            params: MCP 参数
+            timeout_ms: 等待响应的超时时间（毫秒）
 
-            Returns:
-                任意：设备返回的 result 字段内容
+        Returns:
+            任意：设备返回的 result 字段内容
 
-            Raises:
-                RuntimeError: 设备返回错误或超时
-            """
-            if not self.websocket:
-                raise RuntimeError("设备未连接")
-            loop = asyncio.get_running_loop()
-            req_id = self.mcp_request_id
-            self.mcp_request_id += 1
-            fut = loop.create_future()
-            self.mcp_pending_requests[req_id] = {"future": fut}
-            payload = {
-                "type": "mcp",
-                "payload": {
-                    "jsonrpc": "2.0",
-                    "method": method,
-                    "id": req_id,
-                    "params": params or {},
-                },
-            }
-            # 发送请求
-            await self.websocket.send(json.dumps(payload, ensure_ascii=False))
-            try:
-                result = await asyncio.wait_for(fut, timeout=timeout_ms / 1000.0)
-                return result
-            except asyncio.TimeoutError:
-                # 清理挂起请求
-                if req_id in self.mcp_pending_requests:
-                    self.mcp_pending_requests.pop(req_id, None)
-                raise RuntimeError("timeout")
+        Raises:
+            RuntimeError: 设备返回错误或超时
+        """
+        if not self.websocket:
+            raise RuntimeError("设备未连接")
+        loop = asyncio.get_running_loop()
+        req_id = self.mcp_request_id
+        self.mcp_request_id += 1
+        fut = loop.create_future()
+        self.mcp_pending_requests[req_id] = {"future": fut}
+        payload = {
+            "type": "mcp",
+            "payload": {
+                "jsonrpc": "2.0",
+                "method": method,
+                "id": req_id,
+                "params": params or {},
+            },
+        }
+        # 发送请求
+        await self.websocket.send(json.dumps(payload, ensure_ascii=False))
+        try:
+            result = await asyncio.wait_for(fut, timeout=timeout_ms / 1000.0)
+            return result
+        except asyncio.TimeoutError:
+            # 清理挂起请求
+            if req_id in self.mcp_pending_requests:
+                self.mcp_pending_requests.pop(req_id, None)
+            raise RuntimeError("timeout")
