@@ -1,5 +1,5 @@
 import json
-from websocket_server import WebSocketServer
+from core.websocket_server import WebSocketServer
 TAG = __name__
 EMOJI_MAP = {
     "😂": "laughing",
