@@ -2,6 +2,7 @@ import asyncio
 import json
 
 import websockets
+from typing import Dict, Optional
 from config.logger import setup_logging
 from core.connection import ConnectionHandler
 from config.config_loader import get_config_from_api
@@ -13,6 +14,10 @@ TAG = __name__
 
 
 class WebSocketServer:
+    # 静态连接表: client-id -> ConnectionHandler
+    _connections_by_client: Dict[str, "ConnectionHandler"] = {}
+    _connections_lock: asyncio.Lock = asyncio.Lock()
+
     def __init__(self, config: dict):
         self.config = config
         self.logger = setup_logging()
@@ -43,6 +48,37 @@ class WebSocketServer:
         expire_seconds = auth_config.get("expire_seconds", None)
         self.auth = AuthManager(secret_key=secret_key, expire_seconds=expire_seconds)
 
+    # ===== 静态方法: 管理 client-id 到连接实例的映射 =====
+    @classmethod
+    async def put_connection(cls, client_id: str, handler: "ConnectionHandler") -> None:
+        """保存/更新一个连接实例映射到指定 client-id"""
+        if not client_id or handler is None:
+            return
+        async with cls._connections_lock:
+            cls._connections_by_client[client_id] = handler
+
+    @classmethod
+    async def remove_connection(cls, client_id: str) -> None:
+        """移除指定 client-id 的连接映射"""
+        if not client_id:
+            return
+        async with cls._connections_lock:
+            cls._connections_by_client.pop(client_id, None)
+
+    @classmethod
+    async def get_connection(cls, client_id: str) -> Optional["ConnectionHandler"]:
+        """获取指定 client-id 的连接实例，如果不存在返回 None"""
+        if not client_id:
+            return None
+        async with cls._connections_lock:
+            return cls._connections_by_client.get(client_id)
+
+    @classmethod
+    async def list_client_ids(cls) -> list[str]:
+        """获取当前所有已注册的 client-id 列表"""
+        async with cls._connections_lock:
+            return list(cls._connections_by_client.keys())
+
     async def start(self):
         server_config = self.config["server"]
         host = server_config.get("ip", "0.0.0.0")
@@ -55,6 +91,7 @@ class WebSocketServer:
 
     async def _handle_connection(self, websocket):
         headers = dict(websocket.request.headers)
+        client_id_for_map: Optional[str] = None
         if headers.get("device-id", None) is None:
             # 尝试从 URL 的查询参数中获取 device-id
             from urllib.parse import parse_qs, urlparse
@@ -79,6 +116,8 @@ class WebSocketServer:
                 websocket.request.headers["authorization"] = query_params[
                     "authorization"
                 ][0]
+        # 记录client-id（用于连接映射）
+        client_id_for_map = websocket.request.headers.get("client-id")
 
         """处理新连接，每次创建独立的ConnectionHandler"""
         # 先认证，后建立连接
@@ -99,6 +138,12 @@ class WebSocketServer:
             self,  # 传入server实例
         )
         self.active_connections.add(handler)
+        # 在连接生命周期内注册到静态映射
+        if client_id_for_map:
+            try:
+                await WebSocketServer.put_connection(client_id_for_map, handler)
+            except Exception as e:
+                self.logger.bind(tag=TAG).warning(f"注册连接映射失败: {e}")
         try:
             await handler.handle_connection(websocket)
         except Exception as e:
@@ -106,6 +151,12 @@ class WebSocketServer:
         finally:
             # 确保从活动连接集合中移除
             self.active_connections.discard(handler)
+            # 从静态映射中移除
+            if client_id_for_map:
+                try:
+                    await WebSocketServer.remove_connection(client_id_for_map)
+                except Exception as e:
+                    self.logger.bind(tag=TAG).warning(f"移除连接映射失败: {e}")
             # 强制关闭连接（如果还没有关闭的话）
             try:
                 # 安全地检查WebSocket状态并关闭
