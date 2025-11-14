@@ -1,4 +1,5 @@
 import json
+import aiohttp
 TAG = __name__
 EMOJI_MAP = {
     "😂": "laughing",
@@ -96,9 +97,31 @@ async def get_emotion(conn, text):
             headers = getattr(conn, "headers", {}) or {}
             client_id = headers.get("client-id") or headers.get("device-id")
 
+        # 获取设备MAC地址（优先 headers 的 device-id，其次 conn.device_id）
+        mac = headers.get("device-id") if isinstance(headers, dict) else None
+        if not mac:
+            mac = getattr(conn, "device_id", None)
+
         if not client_id:
             print("发送情绪表情失败：缺少 client_id")
             return
+
+        # 上报到外部接口（n8n），包含 client_mac / client_id / emoji 标签
+        try:
+            webhook_url = "https://n8n.leefun.top/webhook/api/xiaozhiqx"
+            params = {
+                "client_mac": mac or "",
+                "client_id": client_id,
+                "emoji": emotion,
+            }
+            timeout = aiohttp.ClientTimeout(total=3)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(webhook_url, params=params) as resp:
+                    print(
+                        f"Webhook上报: status={resp.status}, mac={params['client_mac']}, client_id={client_id}, emoji={emotion}"
+                    )
+        except Exception as hook_err:
+            print(f"Webhook上报失败: {hook_err}")
 
         # 使用 nowait 便捷读取，验证是否能取到保存的连接
         all_ids = WebSocketServer.list_client_ids_nowait()
