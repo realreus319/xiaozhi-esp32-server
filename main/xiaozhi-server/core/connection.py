@@ -815,7 +815,8 @@ class ConnectionHandler:
             # 支持device_id参数的LLM provider
             providers_supporting_device_id = [
                 'dify.dify.LLMProvider',  # Dify provider
-                'coze.coze.LLMProvider'   # Coze provider
+                'coze.coze.LLMProvider',  # Coze provider
+                'n8n.n8n.LLMProvider'     # N8N provider
             ]
             
             # 构造完整的provider标识

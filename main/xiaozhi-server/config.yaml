@@ -522,6 +522,21 @@ LLM:
     type: ollama
     model_name: qwen2.5 #  使用的模型名称，需要预先使用ollama pull下载
     base_url: http://localhost:11434  # Ollama服务地址
+  # === N8N LLM Provider 示例（与 DifyLLM 同级） ===
+  # 如果要启用，请将 selected_module.LLM 设置为 N8NLLM
+  N8NLLM:
+    type: n8n
+    # N8N webhook 地址（示例）
+    base_url: https://your-n8n.example/webhook/your-endpoint
+    # 如果 N8N 工作流需要鉴权，可在此处填写；也会在请求头中作为 Bearer token
+    api_key: your_api_key_here
+    # 模式字段由 provider 使用，可按需设置
+    mode: chat
+    # 可选扩展字段（provider 实现中会透传 yuliu1/2/3）
+    yuliu1: ""
+    yuliu2: ""
+    yuliu3: ""
+
   DifyLLM:
     # 定义LLM API类型
     type: dify
