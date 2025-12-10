@@ -202,24 +202,43 @@ public class ConfigServiceImpl implements ConfigService {
             requestBody.put("mac", macAddress); // 使用传入的 macAddress 变量
             HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(requestBody, headers);
 
-            // 发送 POST 请求并接收响应
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    requestUrl,
-                    HttpMethod.POST,
-                    requestEntity,
-                    Map.class
-            );
-            logger.info("响应数据：{}", response.getBody());
-            // 解析响应中的 prompt 数据
-            Map<String, Object> responseBody = response.getBody();
-            if (responseBody != null && (Boolean) responseBody.get("success")) {
-                Map<String, String> data = (Map<String, String>) responseBody.get("data");
-                prompt = data.get("prompt");
-                logger.info("获取到的 prompt：{}", prompt);
-            } else {
-                // 如果请求失败或没有获取到 prompt，则使用默认值
+            // 发送 POST 请求并接收响应，增加错误和非200处理
+            try {
+                ResponseEntity<Map> response = restTemplate.exchange(
+                        requestUrl,
+                        HttpMethod.POST,
+                        requestEntity,
+                        Map.class
+                );
+                // 如果返回的 HTTP 状态不是 200，则使用默认 prompt
+                if (response == null || response.getStatusCode() != HttpStatus.OK) {
+                    logger.warn("请求 prompt 接口返回非200或无响应，使用默认 prompt，status={}",
+                            response == null ? "null" : response.getStatusCodeValue());
+                    prompt = agent.getSystemPrompt();
+                } else {
+                    logger.info("响应数据：{}", response.getBody());
+                    // 解析响应中的 prompt 数据
+                    Map<String, Object> responseBody = response.getBody();
+                    if (responseBody != null && Boolean.TRUE.equals(responseBody.get("success"))) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, String> data = (Map<String, String>) responseBody.get("data");
+                        if (data != null && data.get("prompt") != null) {
+                            prompt = data.get("prompt");
+                            logger.info("获取到的 prompt：{}", prompt);
+                        } else {
+                            prompt = agent.getSystemPrompt();
+                            logger.warn("返回数据中未包含 prompt 字段，使用默认值：{}", prompt);
+                        }
+                    } else {
+                        // 如果请求失败或没有获取到 prompt，则使用默认值
+                        prompt = agent.getSystemPrompt();
+                        logger.warn("获取 prompt 失败或 success=false，使用默认值：{}", prompt);
+                    }
+                }
+            } catch (Exception ex) {
+                // 捕获 RestTemplate 抛出的异常，使用默认 prompt
+                logger.warn("请求 prompt 接口异常，使用默认 prompt：{}，异常：{}", agent.getSystemPrompt(), ex.toString());
                 prompt = agent.getSystemPrompt();
-                logger.warn("获取 prompt 失败，使用默认值：{}", prompt);
             }
         }else{
             prompt = agent.getSystemPrompt();
