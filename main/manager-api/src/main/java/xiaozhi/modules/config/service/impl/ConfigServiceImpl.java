@@ -190,7 +190,7 @@ public class ConfigServiceImpl implements ConfigService {
         if(agent.getAgentName().startsWith("Lx")){
             logger.info("匹配成功，使用特定提示词");
             // 修改部分开始
-            String requestUrl = sysParamsService.getValueObject("promptUrl", String.class);
+            String requestUrl = sysParamsService.getValue("promptUrl", true);
             logger.info("请求URL：{}", requestUrl);
 
             // 创建请求头
