@@ -44,6 +44,7 @@ import xiaozhi.modules.voiceclone.service.VoiceCloneService;
 @Service
 @AllArgsConstructor
 public class ConfigServiceImpl implements ConfigService {
+    private static final Logger logger = LoggerFactory.getLogger(ConfigService.class);
     private final SysParamsService sysParamsService;
     private final DeviceService deviceService;
     private final ModelConfigService modelConfigService;
@@ -55,6 +56,7 @@ public class ConfigServiceImpl implements ConfigService {
     private final AgentMcpAccessPointService agentMcpAccessPointService;
     private final VoiceCloneService cloneVoiceService;
     private final AgentVoicePrintDao agentVoicePrintDao;
+    private final RestTemplate restTemplate;
 
     @Override
     public Object getConfig(Boolean isCache) {
@@ -180,10 +182,48 @@ public class ConfigServiceImpl implements ConfigService {
         // 获取声纹信息
         buildVoiceprintConfig(agent.getId(), result);
 
+        String prompt = if(agent.getAgentName().startsWith("Lx")){
+            Logger.info("匹配成功，使用特定提示词");
+            // 修改部分开始
+            String requestUrl = sysParamsService.getValueObject("promptUrl", String.class);
+            Logger.info("请求URL：{}", requestUrl);
+
+            // 创建请求头
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            // 创建请求体
+            Map<String, String> requestBody = new HashMap<>();
+            requestBody.put("mac", macAddress); // 使用传入的 macAddress 变量
+            HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(requestBody, headers);
+
+            // 发送 POST 请求并接收响应
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    requestUrl,
+                    HttpMethod.POST,
+                    requestEntity,
+                    Map.class
+            );
+            Logger.info("响应数据：{}", response.getBody());
+            // 解析响应中的 prompt 数据
+            Map<String, Object> responseBody = response.getBody();
+            if (responseBody != null && (Boolean) responseBody.get("success")) {
+                Map<String, String> data = (Map<String, String>) responseBody.get("data");
+                prompt = data.get("prompt");
+                Logger.info("获取到的 prompt：{}", prompt);
+            } else {
+                // 如果请求失败或没有获取到 prompt，则使用默认值
+                prompt = agent.getSystemPrompt();
+                Logger.warn("获取 prompt 失败，使用默认值：{}", prompt);
+            }
+        }else{
+            agent.getSystemPrompt();
+        }
+
         // 构建模块配置
         buildModuleConfig(
                 agent.getAgentName(),
-                agent.getSystemPrompt(),
+                prompt,
                 agent.getSummaryMemory(),
                 voice,
                 referenceAudio,
