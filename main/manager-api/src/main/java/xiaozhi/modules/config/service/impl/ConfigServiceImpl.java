@@ -1,5 +1,7 @@
 package xiaozhi.modules.config.service.impl;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -182,11 +184,12 @@ public class ConfigServiceImpl implements ConfigService {
         // 获取声纹信息
         buildVoiceprintConfig(agent.getId(), result);
 
-        String prompt = if(agent.getAgentName().startsWith("Lx")){
-            Logger.info("匹配成功，使用特定提示词");
+        String prompt;
+        if(agent.getAgentName().startsWith("Lx")){
+            logger.info("匹配成功，使用特定提示词");
             // 修改部分开始
             String requestUrl = sysParamsService.getValueObject("promptUrl", String.class);
-            Logger.info("请求URL：{}", requestUrl);
+            logger.info("请求URL：{}", requestUrl);
 
             // 创建请求头
             HttpHeaders headers = new HttpHeaders();
@@ -204,20 +207,20 @@ public class ConfigServiceImpl implements ConfigService {
                     requestEntity,
                     Map.class
             );
-            Logger.info("响应数据：{}", response.getBody());
+            logger.info("响应数据：{}", response.getBody());
             // 解析响应中的 prompt 数据
             Map<String, Object> responseBody = response.getBody();
             if (responseBody != null && (Boolean) responseBody.get("success")) {
                 Map<String, String> data = (Map<String, String>) responseBody.get("data");
                 prompt = data.get("prompt");
-                Logger.info("获取到的 prompt：{}", prompt);
+                logger.info("获取到的 prompt：{}", prompt);
             } else {
                 // 如果请求失败或没有获取到 prompt，则使用默认值
                 prompt = agent.getSystemPrompt();
-                Logger.warn("获取 prompt 失败，使用默认值：{}", prompt);
+                logger.warn("获取 prompt 失败，使用默认值：{}", prompt);
             }
         }else{
-            agent.getSystemPrompt();
+            prompt = agent.getSystemPrompt();
         }
 
         // 构建模块配置
