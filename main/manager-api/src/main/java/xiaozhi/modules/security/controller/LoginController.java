@@ -1,7 +1,10 @@
 package xiaozhi.modules.security.controller;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.Calendar;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,6 +41,7 @@ import xiaozhi.modules.sys.service.SysDictDataService;
 import xiaozhi.modules.sys.service.SysParamsService;
 import xiaozhi.modules.sys.service.SysUserService;
 import xiaozhi.modules.sys.vo.SysDictDataItem;
+import xiaozhi.common.utils.JsonUtils;
 
 /**
  * 登录控制层
@@ -112,7 +116,6 @@ public class LoginController {
         return sysUserTokenService.createToken(userDTO.getId());
     }
 
-    
 
 
     @PostMapping("/register")
@@ -121,15 +124,15 @@ public class LoginController {
         if (!sysUserService.getAllowUserRegister()) {
             throw new RenException(ErrorCode.USER_REGISTER_DISABLED);
         }
-        
+
         String password = login.getPassword();
-        
+
         // 使用工具类解密并验证验证码
         String actualPassword = Sm2DecryptUtil.decryptAndValidateCaptcha(
                 password, login.getCaptchaId(), captchaService, sysParamsService);
-        
+
         login.setPassword(actualPassword);
-        
+
         // 是否开启手机注册
         Boolean isMobileRegister = sysParamsService
                 .getValueObject(Constant.SysMSMParam.SERVER_ENABLE_MOBILE_REGISTER.getValue(), Boolean.class);
@@ -208,11 +211,11 @@ public class LoginController {
         }
 
         String password = dto.getPassword();
-        
+
         // 使用工具类解密并验证验证码
         String actualPassword = Sm2DecryptUtil.decryptAndValidateCaptcha(
                 password, dto.getCaptchaId(), captchaService, sysParamsService);
-        
+
         dto.setPassword(actualPassword);
 
         sysUserService.changePasswordDirectly(userDTO.getId(), dto.getPassword());
@@ -233,13 +236,19 @@ public class LoginController {
         config.put("beianIcpNum", sysParamsService.getValue(Constant.SysBaseParam.BEIAN_ICP_NUM.getValue(), true));
         config.put("beianGaNum", sysParamsService.getValue(Constant.SysBaseParam.BEIAN_GA_NUM.getValue(), true));
         config.put("name", sysParamsService.getValue(Constant.SysBaseParam.SERVER_NAME.getValue(), true));
-        
+
         // SM2公钥
         String publicKey = sysParamsService.getValue(Constant.SM2_PUBLIC_KEY, true);
         if (StringUtils.isBlank(publicKey)) {
             throw new RenException(ErrorCode.SM2_KEY_NOT_CONFIGURED);
         }
         config.put("sm2PublicKey", publicKey);
+
+        // 获取system-web.menu参数配置
+        String menuConfig = sysParamsService.getValue("system-web.menu", false);
+        if (StringUtils.isNotBlank(menuConfig)) {
+            config.put("systemWebMenu", JsonUtils.parseObject(menuConfig, Object.class));
+        }
 
         return new Result<Map<String, Object>>().ok(config);
     }

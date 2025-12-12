@@ -24,10 +24,12 @@ import xiaozhi.common.redis.RedisUtils;
 import xiaozhi.common.utils.ConvertUtils;
 import xiaozhi.common.utils.JsonUtils;
 import xiaozhi.modules.agent.dao.AgentVoicePrintDao;
+import xiaozhi.modules.agent.entity.AgentContextProviderEntity;
 import xiaozhi.modules.agent.entity.AgentEntity;
 import xiaozhi.modules.agent.entity.AgentPluginMapping;
 import xiaozhi.modules.agent.entity.AgentTemplateEntity;
 import xiaozhi.modules.agent.entity.AgentVoicePrintEntity;
+import xiaozhi.modules.agent.service.AgentContextProviderService;
 import xiaozhi.modules.agent.service.AgentMcpAccessPointService;
 import xiaozhi.modules.agent.service.AgentPluginMappingService;
 import xiaozhi.modules.agent.service.AgentService;
@@ -58,6 +60,7 @@ public class ConfigServiceImpl implements ConfigService {
     private final TimbreService timbreService;
     private final AgentPluginMappingService agentPluginMappingService;
     private final AgentMcpAccessPointService agentMcpAccessPointService;
+    private final AgentContextProviderService agentContextProviderService;
     private final VoiceCloneService cloneVoiceService;
     private final AgentVoicePrintDao agentVoicePrintDao;
     private final RestTemplate restTemplate;
@@ -79,7 +82,7 @@ public class ConfigServiceImpl implements ConfigService {
         // 查询默认智能体
         AgentTemplateEntity agent = agentTemplateService.getDefaultTemplate();
         if (agent == null) {
-            throw new RenException("默认智能体未找到");
+            throw new RenException(ErrorCode.AGENT_TEMPLATE_NOT_FOUND);
         }
 
         // 构建模块配置
@@ -92,6 +95,7 @@ public class ConfigServiceImpl implements ConfigService {
                 null,
                 agent.getVadModelId(),
                 agent.getAsrModelId(),
+                null,
                 null,
                 null,
                 null,
@@ -116,13 +120,13 @@ public class ConfigServiceImpl implements ConfigService {
             if (StringUtils.isNotBlank(cachedCode)) {
                 throw new RenException(ErrorCode.OTA_DEVICE_NEED_BIND, cachedCode);
             }
-            throw new RenException(ErrorCode.OTA_DEVICE_NOT_FOUND, "not found device");
+            throw new RenException(ErrorCode.OTA_DEVICE_NOT_FOUND);
         }
 
         // 获取智能体信息
         AgentEntity agent = agentService.getAgentById(device.getAgentId());
         if (agent == null) {
-            throw new RenException("智能体未找到");
+            throw new RenException(ErrorCode.AGENT_NOT_FOUND);
         }
         // 获取音色信息
         String voice = null;
@@ -183,6 +187,13 @@ public class ConfigServiceImpl implements ConfigService {
             mcpEndpoint = mcpEndpoint.replace("/mcp/", "/call/");
             result.put("mcp_endpoint", mcpEndpoint);
         }
+        
+        // 获取上下文源配置
+        AgentContextProviderEntity contextProviderEntity = agentContextProviderService.getByAgentId(agent.getId());
+        if (contextProviderEntity != null && contextProviderEntity.getContextProviders() != null && !contextProviderEntity.getContextProviders().isEmpty()) {
+            result.put("context_providers", contextProviderEntity.getContextProviders());
+        }
+
         // 获取声纹信息
         buildVoiceprintConfig(agent.getId(), result);
 
@@ -259,6 +270,7 @@ public class ConfigServiceImpl implements ConfigService {
                 agent.getTtsModelId(),
                 agent.getMemModelId(),
                 agent.getIntentModelId(),
+                null,
                 result,
                 true);
 
@@ -435,12 +447,14 @@ public class ConfigServiceImpl implements ConfigService {
             String ttsModelId,
             String memModelId,
             String intentModelId,
+            String ragModelId,
             Map<String, Object> result,
             boolean isCache) {
         Map<String, String> selectedModule = new HashMap<>();
 
-        String[] modelTypes = { "VAD", "ASR", "TTS", "Memory", "Intent", "LLM", "VLLM" };
-        String[] modelIds = { vadModelId, asrModelId, ttsModelId, memModelId, intentModelId, llmModelId, vllmModelId };
+        String[] modelTypes = { "VAD", "ASR", "TTS", "Memory", "Intent", "LLM", "VLLM", "RAG" };
+        String[] modelIds = { vadModelId, asrModelId, ttsModelId, memModelId, intentModelId, llmModelId, vllmModelId,
+                ragModelId };
         String intentLLMModelId = null;
         String memLocalShortLLMModelId = null;
 
