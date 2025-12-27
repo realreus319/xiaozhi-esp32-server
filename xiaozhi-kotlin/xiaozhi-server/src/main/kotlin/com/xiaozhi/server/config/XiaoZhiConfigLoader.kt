@@ -1,25 +1,23 @@
 package com.xiaozhi.server.config
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
-import com.fasterxml.jackson.module.kotlin.KotlinModule
-import com.fasterxml.jackson.module.kotlin.readValue
+
 import com.xiaozhi.common.XiaoZhiConfig
 import org.slf4j.LoggerFactory
-import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.stereotype.Component
+import tools.jackson.module.kotlin.readValue
 import java.io.File
 
 @Component
-@ConfigurationProperties(prefix = "xiaozhi")
-class XiaoZhiConfigLoader {
+class XiaoZhiConfigLoader(
+) {
     var configPath: String = "config/config.yaml"
     var dataDir: String = "data"
 
     private val logger = LoggerFactory.getLogger(XiaoZhiConfigLoader::class.java)
 
+    private val objectMapper = JsonConfig.yamlMapper
     fun load(): XiaoZhiConfig {
-        val mapper = ObjectMapper(YAMLFactory()).registerModule(KotlinModule.Builder().build())
+        val mapper = objectMapper
 
         val configFiles = listOf(
             File("$dataDir/.config.yaml"),
@@ -46,9 +44,7 @@ class XiaoZhiConfigLoader {
     }
 
     fun save(config: XiaoZhiConfig) {
-        val mapper = ObjectMapper(YAMLFactory())
-            .registerModule(KotlinModule.Builder().build())
-            .findAndRegisterModules()
+        val mapper = objectMapper
 
         val file = File("$dataDir/.config.yaml")
         file.parentFile?.mkdirs()
