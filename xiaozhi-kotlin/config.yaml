@@ -1,0 +1,132 @@
+xiaozhi:
+  name: "小智"
+  exit_commands: ["退出", "关闭", "exit", "quit"]
+  wakeup_words: ["你好小智", "嘿你好呀", "你好小志"]
+  end_prompt:
+    enable: false
+    prompt: "请你以```时间过得真快```未来头，用富有感情、依依不舍的话来结束这场对话吧。！"
+
+  close_connection_no_voice_time: 120
+
+  # WebSocket 服务器配置
+  server:
+    port: 8080
+    path: /ws
+
+  # 模块选择配置
+  selected_module:
+    asr: doubao_stream
+    vad: silero
+    llm: doubao
+    tts: edge
+    memory: nomem
+    intent: function_call
+
+  # ASR 配置
+  asr:
+    doubao_stream:
+      appid: "your_appid"
+      access_token: "your_access_token"
+      cluster: "volcengine_input_common"
+      workflow: "audio_in,resample,partition,vad,fe,decode,itn,nlu_punctuate"
+      result_type: single
+      format: pcm
+      codec: pcm
+      rate: 16000
+      language: zh-CN
+      bits: 16
+      channel: 1
+      auth_method: token
+      secret: "access_secret"
+      end_window_size: 200
+
+    fun_local:
+      model_path: "models/SenseVoiceSmall"
+
+  # VAD 配置
+  vad:
+    silero:
+      model_path: "models/snakers4_silero-vad"
+      threshold: 0.5
+      window_size_ms: 60
+      speech_pad_ms: 30
+
+  # LLM 配置
+  llm:
+    doubao:
+      api_url: "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+      model: "doubao-1.5-pro-32k-250115"
+      max_tokens: 4096
+      temperature: 0.7
+      top_p: 0.9
+      frequency_penalty: 0.0
+
+    openai:
+      base_url: "https://api.openai.com/v1"
+      model: "gpt-4o-mini"
+      api_key: ""
+      max_tokens: 4096
+      temperature: 0.7
+      top_p: 1.0
+      frequency_penalty: 0.0
+
+    chatglm:
+      base_url: "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+      model: "glm-4-flash"
+      api_key: ""
+      max_tokens: 4096
+      temperature: 0.7
+
+  # TTS 配置
+  tts:
+    edge:
+      voice: "zh-CN-XiaoxiaoNeural"
+      rate: 1
+      pitch: 1
+      volume: 50
+      output_dir: "tmp"
+
+    doubao:
+      api_url: "https://openspeech.bytedance.com/api/v1/tts"
+      appid: "your_appid"
+      access_token: "your_access_token"
+      cluster: "volcano_tts"
+      voice: "zh_female_wanwanxiaohe_moon_bigtts"
+      speed_ratio: 1.0
+      volume_ratio: 1.0
+      pitch_ratio: 1.0
+      output_dir: "tmp"
+
+  # Memory 配置
+  memory:
+    nomem: {}
+
+  # 意图识别配置
+  intent:
+    nointent: {}
+    function_call:
+      type: function_call
+
+  # 插件配置
+  plugins:
+    home_assistant:
+      enable: false
+      devices: []
+
+  # MCP 配置
+  mcp:
+    endpoint: ""
+    context_providers: []
+
+  # 上报配置
+  report:
+    asr:
+      enable: false
+    tts:
+      enable: false
+
+  # 记忆配置
+  summary_memory: {}
+
+  # 设备配置
+  devices: {}

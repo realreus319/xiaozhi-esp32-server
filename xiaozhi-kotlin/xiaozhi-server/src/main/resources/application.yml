@@ -1,0 +1,22 @@
+server:
+  port: 8000
+
+xiaozhi:
+  config-path: config/config.yaml
+  data-dir: data
+
+logging:
+  level:
+    com.xiaozhi: DEBUG
+    org.springframework.web: INFO
+    reactor.netty: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+spring:
+  application:
+    name: xiaozhi-server
+  webflux:
+    base-path: /
+  codec:
+    auto-configure: true
