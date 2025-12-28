@@ -1,12 +1,13 @@
 package com.xiaozhi.server.config
 
 import com.xiaozhi.common.XiaoZhiConfig
+import com.xiaozhi.server.connection.ConnectionHandler
 import com.xiaozhi.server.core.providers.ProviderFactory
-import com.xiaozhi.server.providers.*
+import com.xiaozhi.server.plugins.PluginFunctionExecutor
 import org.slf4j.LoggerFactory
 import org.springframework.web.reactive.socket.WebSocketSession
 import org.springframework.web.reactive.socket.client.WebSocketClient
-import org.springframework.web.reactive.socket.adapter.ReactorNettyWebSocketClient
+import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient
 import java.util.concurrent.ConcurrentHashMap
 
 class WebSocketConfig {
